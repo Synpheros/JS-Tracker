@@ -1,0 +1,13 @@
+{
+  "name": "js-tracker",
+  "version": "0.1.0",
+  "description": "Client Side Tracker Asset written in JavaScript",
+  "main": "src/tk-widget.js",
+  "repository": "https://github.com/synpheros/JS-Tracker",
+  "author": "Ivan J Perez",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "webpack": "^2.3.2",
+    "jquery" : "*"
+  }
+}
