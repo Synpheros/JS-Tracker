@@ -18,116 +18,171 @@
 </style>
 <body>
 <script type="text/javascript">
-	var url = "https://rage.e-ucm.es/api/proxy/gleaner/collector/";
 
-	var actor = "{}";
+	var tracker = new TrackerAsset();
 
-	var authToken = "";
-	var playerId = "";
-	var objectId = "";
-	var session = 0;
-	var actor = "";
+	var loginButton = function(){
+		tracker.url = $("#host").val() + "api/";
 
-	var extensions = {};
-
-	var trackButton = function(){
-		if($("#send_score").is(':checked'))				setScore($("#score").val());
-		if($("#send_completion").is(':checked'))		setCompletion($("#completion").val());
-		if($("#send_success").is(':checked'))			setSuccess($("#success").val());
-		if($("#send_response").is(':checked'))			setResponse($("#response").val());
-
-		trace($("#verb").val(),$("#target_type").val(),$("#target_id").val())
-	}
-
-	var addExtensionButton = function(){
-		addExtension($("#key").val(), Number($("#value").val()));
-	}
-
-	var start = function(){
-		$.post( url + "start/" + $('#trackingCode').val(), function( data ) {
-			$( "#authToken" ).text(data['authToken']);
-			$( "#playerId" ).text(data['playerId']);
-			$( "#session" ).text(data['session']);
-			$( "#actor" ).text(JSON.stringify(data['actor']));
-
-			console.info(data);
-
-			authToken = data['authToken'];
-			actor = data['actor'];
-			playerId = data['playerId'];
-			objectId = null;//data['objectId'];
-			session = data['session'];
-		});
-	}
-
-	var trace = function(verb,type,id){
-		/*var t = {
-			actor: actor,
-			verb: { 
-				id: "http://adlnet.gov/expapi/verbs/completed"
-			}, 
-			object: { 
-				id: "http://a2:3000/api/proxy/gleaner/games/58c01b4ecc1da9006de2c9bf/58c01b4ecc1da9006de2c9c0/CompletableIDJS", 
-				definition: {
-					type: "https://w3id.org/xapi/seriousgames/activity-types/initialized"
-				}
-			},
-			result: {
-				id:
-			},
-			timestamp: moment().toISOString()
-		};*/
-
-		var t = new TrackerEvent();
-		t.Actor = actor;
-		t.Event = new TrackerEvent.TraceVerb(verb);
-		t.Target = new TrackerEvent.TraceObject(type, id);
-		t.Result = new TrackerEvent.TraceResult();
-		t.Result.setExtensions(extensions);
-		extensions = {};
-
-		console.info(t);
-		$( "#csv" ).text(t.ToCsv());
-		$( "#xapi" ).text(t.ToXapi());
-
-		$.ajax({
-			url: url + "track",
-			type: 'post',
-			data: '[' + t.ToXapi() + ']',
-			headers: {
-				'Authorization': authToken,
-				'Content-Type': 'application/json'
-			},
-			dataType: 'json',
-			success: function (data) {
-				console.info(data);
-				$("#result").text(data['message']);
-			},
-			error: function (data) {
-				console.info(data);
-				$("#result").text(data['statusText']);
+		tracker.Login($("#username").val(),$("#password").val(), function(data,error){
+			if(!error){
+				$( "#login" ).css('background-color','green');
+			}else{
+				$( "#login" ).css('background-color','red');
 			}
 		});
 	}
 
-	var setScore = function(value){
-		addExtension("score", value);
+	var startButton = function(){
+		tracker.url = $("#host").val() + "api/";
+		tracker.trackingCode = $("#trackingCode").val();
+
+		tracker.Start(function(result, error){
+			if(!error){
+				$( "#authToken" ).text(result['authToken']);
+				$( "#playerId" ).text(result['playerId']);
+				$( "#session" ).text(result['session']);
+				$( "#actor" ).text(JSON.stringify(result['actor']));
+				$( "#start" ).css('background-color','green');
+			}else{
+				$( "#start" ).css('background-color','red');
+			}
+		});
 	}
 
-	var setCompletion = function(value){
-		addExtension("completion", value);
+	var trackButton = function(){
+		if($("#send_score").is(':checked'))				tracker.setScore($("#score").val());
+		if($("#send_completion").is(':checked'))		tracker.setCompletion($("#completion").val());
+		if($("#send_success").is(':checked'))			tracker.setSuccess($("#success").val());
+		if($("#send_response").is(':checked'))			tracker.setResponse($("#response").val());
+
+		tracker.Trace($("#verb").val(),$("#target_type").val(),$("#target_id").val())
 	}
 
-	var setSuccess = function(value){
-		addExtension("success", value);
+	var addExtensionButton = function(){
+		tracker.addExtension($("#key").val(), Number($("#value").val()));
 	}
 
-	var setResponse = function(value){
-		addExtension("response", value);
-	}
+	function TrackerAsset(){
+		this.url = "https://rage.e-ucm.es/";
+		this.collector = "proxy/gleaner/collector/";
+		this.trackingCode = "";
 
-	var addExtension = function(key,value){
-		extensions[key] = value;
+		this.actor = "{}";
+
+		this.authToken = "";
+		this.playerId = "";
+		this.objectId = "";
+		this.session = 0;
+
+		this.extensions = {};
+
+		this.Login = function(username, password, callback){
+			var tracker = this;
+			$.ajax({
+				url: this.url + "login",
+				type: 'post',
+				data: JSON.stringify({username: username, password: password}),
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				dataType: 'json',
+				success: function (data) {
+					tracker.authToken = data['user']['token'];
+					console.info("AuthToken: " + data['user']['token']);
+					callback(data, null);
+					
+				},
+				error: function (data) {
+					console.info(data);
+					callback(data, true)
+				}
+			});
+		}
+
+		this.Start = function(callback){
+			var tracker = this;
+
+			var headers = {
+				'Content-Type': 'application/json'
+			};
+
+			if(this.authToken)
+				headers.Authorization = "Bearer " + this.authToken;
+
+			$.ajax({
+				url: this.url + this.collector + "start/" + this.trackingCode,
+				type: 'post',
+				headers: headers,
+				dataType: 'json',
+				success: function (data) {
+					console.info(data);
+
+					tracker.authToken = data['authToken'];
+					tracker.actor = data['actor'];
+					tracker.playerId = data['playerId'];
+					tracker.objectId = null;//data['objectId'];
+					tracker.session = data['session'];
+
+					callback(data, null)
+				},
+				error: function (data) {
+					callback(data,true)
+				}
+			});
+		}
+
+		this.Trace = function(verb,type,id){
+			var t = new TrackerEvent(this);
+			t.setActor(this.actor);
+			t.setEvent(new TrackerEvent.TraceVerb(verb));
+			t.setTarget(new TrackerEvent.TraceObject(type, id));
+			t.setResult(new TrackerEvent.TraceResult());
+			t.Result.setExtensions(this.extensions);
+			this.extensions = {};
+
+			$( "#csv" ).text(t.ToCsv());
+			$( "#xapi" ).text(t.ToXapi());
+
+			$.ajax({
+				url: this.url + this.collector + "track",
+				type: 'post',
+				data: '[' + t.ToXapi() + ']',
+				headers: {
+					'Authorization': this.authToken,
+					'Content-Type': 'application/json'
+				},
+				dataType: 'json',
+				success: function (data) {
+					console.info(data);
+					$("#result").text(data['message']);
+				},
+				error: function (data) {
+					console.info(data);
+					$("#result").text(data['statusText']);
+				}
+			});
+		}
+
+		this.setScore = function(value){
+			this.addExtension("score", value);
+		}
+
+		this.setCompletion = function(value){
+			this.addExtension("completion", value);
+		}
+
+		this.setSuccess = function(value){
+			this.addExtension("success", value);
+		}
+
+		this.setResponse = function(value){
+			this.addExtension("response", value);
+		}
+
+		this.addExtension = function(key,value){
+			this.extensions[key] = value;
+		}
 	}
 
 	var obsize = function(obj) {
@@ -139,13 +194,34 @@
 	};
 
 
-	function TrackerEvent (){
+	function TrackerEvent (tracker){
+		this.tracker = tracker;
+
 		this.TimeStamp = Date.now();
 
 		this.Actor;
 		this.Event;
 		this.Target;
 		this.Result;
+
+		this.setActor = function(actor){
+			this.Actor = actor;
+		}
+
+		this.setEvent = function(event){
+			this.Event = event;
+			this.Event.parent = this;
+		}
+
+		this.setTarget = function(target){
+			this.Target = target;
+			this.Target.parent = this;
+		}
+
+		this.setResult = function(result){
+			this.Result = result;
+			this.Result.parent = this;
+		}
 
 		this.ToCsv = function()
 		{
@@ -217,6 +293,8 @@
     // Trace Target
 
     TrackerEvent.TraceObject = function(type, id){
+    	this.parent;
+
 		this.Type = type.toLowerCase();
 		this.ID = id;
 
@@ -233,7 +311,7 @@
                 typeKey = TrackerEvent.TraceObject.ObjectIDs[this.Type];
             }
 
-            id = ((objectId != null) ? objectId + '/' + this.Type + '/' : "") + this.ID;
+            id = ((this.parent.tracker.objectId != null) ? this.parent.tracker.objectId + '/' + this.Type + '/' : "") + this.ID;
             definition = {type : typeKey};
 
             return {
@@ -280,6 +358,8 @@
 	// Trace Target
 
     TrackerEvent.TraceResult = function(){
+    	this.parent;
+
 		this.Score = null;
 		this.Success = null;
 		this.Completion = null;
@@ -362,7 +442,7 @@
                 ret.score = {raw: Number(this.Score)};
             }
 
-            if( this.Extensions != null){
+            if( this.Extensions != null && obsize(this.Extensions) > 0){
             	ret.extensions = this.Extensions;
             }
 
@@ -377,19 +457,24 @@
 		<h2>Tracker Start</h2>
 		<table class="fields">
 			<tr>
+				<td>Host</td>
+				<td><input id="host" type="text" name="host" placeholder="https://host:port/" value="https://rage.e-ucm.es/"></td>
+			</tr>
+			<tr>
 				<td>Tracking Code</td>
 				<td><input id="trackingCode" type="text" name="trackingCode" value="58e3779b1043c7006d76d0e07sj9hnzljjo1dcxr"></td>
 			</tr>
 			<tr>
 				<td>User</td>
-				<td><input id="user" type="text" name="user"></td>
+				<td><input id="username" type="text" name="username"></td>
 			</tr>
 			<tr>
 				<td>Pass</td>
-				<td><input id="pass" type="password" name="pass"></td>
+				<td><input id="password" type="password" name="password"></td>
 			</tr>
 		</table>
-		<p><input type="button" name="start" value="Start" onclick="start()"></p>
+		<p><input type="button" id="login" value="Login" onclick="loginButton()"></p>
+		<p><input type="button" id="start" value="Start" onclick="startButton()"></p>
 	</div>
 	<div class="box">
 		<p>authToken = <span id="authToken"></span></p>
