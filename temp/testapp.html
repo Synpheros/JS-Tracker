@@ -59,6 +59,16 @@
 		tracker.Trace($("#verb").val(),$("#target_type").val(),$("#target_id").val())
 	}
 
+	var flushButton = function(){
+		tracker.Flush(function(result, error){
+			if(!error){
+				$( "#flush" ).css('background-color','green');
+			}else{
+				$( "#flush" ).css('background-color','red');
+			}
+		})
+	}
+
 	var addExtensionButton = function(){
 		tracker.addExtension($("#key").val(), Number($("#value").val()));
 	}
@@ -76,6 +86,12 @@
 		this.session = 0;
 
 		this.extensions = {};
+
+		this.queue = [];
+		this.max_flush = 4;
+		this.batch_size = 10;
+
+		this.backupStorage = true;
 
 		this.Login = function(username, password, callback){
 			var tracker = this;
@@ -144,24 +160,58 @@
 			$( "#csv" ).text(t.ToCsv());
 			$( "#xapi" ).text(t.ToXapi());
 
-			$.ajax({
-				url: this.url + this.collector + "track",
-				type: 'post',
-				data: '[' + t.ToXapi() + ']',
-				headers: {
-					'Authorization': this.authToken,
-					'Content-Type': 'application/json'
-				},
-				dataType: 'json',
-				success: function (data) {
-					console.info(data);
-					$("#result").text(data['message']);
-				},
-				error: function (data) {
-					console.info(data);
-					$("#result").text(data['statusText']);
+			this.queue.push(t);
+		}
+
+		this.Flush = function(callback){
+			if(this.queue.length > 0){
+				var traced = 0;
+				var to_flush = "";
+
+				if(this.backupStorage)
+					var backup = "";
+
+				while(this.queue.length > 0 && traced < this.max_flush){
+					traced++;
+
+					var current = this.queue.shift();
+
+					to_flush += current.ToXapi() + ',';
+
+					if(this.backupStorage)
+						backup += current.ToCsv() + '\r\n';
 				}
-			});
+
+				to_flush = to_flush.replace(/(^,)|(,$)/g, "");
+
+				if(this.backupStorage){
+					var current = localStorage.getItem("backup")
+
+					if(current)
+						backup = current + backup;
+
+					localStorage.setItem("backup", backup);
+				}
+
+				$.ajax({
+					url: this.url + this.collector + "track",
+					type: 'post',
+					data: "[" + to_flush + "]",
+					headers: {
+						'Authorization': this.authToken,
+						'Content-Type': 'application/json'
+					},
+					dataType: 'json',
+					success: function (data) {
+						console.info(data);
+						callback(data, null);
+					},
+					error: function (data) {
+						console.info(data);
+						callback(data, true);
+					}
+				});
+			}
 		}
 
 		this.setScore = function(value){
@@ -178,6 +228,10 @@
 
 		this.setResponse = function(value){
 			this.addExtension("response", value);
+		}
+
+		this.setVar = function(key,value){
+			this.addExtension(key,value);
 		}
 
 		this.addExtension = function(key,value){
@@ -533,7 +587,8 @@
 				<td><input id="button" type="button" value="Add extension" onclick="addExtensionButton()"></td>
 			</tr>
 		</table>
-		<input type="button" value="Send Trace" onclick="trackButton()">
+		<input id="trace" type="button" value="Add Trace" onclick="trackButton()">
+		<input id="flush" type="button" value="Flush" onclick="flushButton()">
 		<p>result = <span id="result"></span></p>		
 	</div>
 
