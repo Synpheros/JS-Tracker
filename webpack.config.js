@@ -2,6 +2,7 @@
 
 const path = require('path');
 const jquery = require('jquery');
+const cloneDeep = require('lodash.clonedeep');
 const webpack = require("webpack");
 
 const defaults = {
@@ -11,7 +12,7 @@ const defaults = {
 
   output: {
     path: path.resolve(__dirname, "dist"),
-    library: "tracker",
+    library: "TrackerAsset",
     libraryTarget: "umd",
     filename: "js-tracker.bundle.js",
   },
